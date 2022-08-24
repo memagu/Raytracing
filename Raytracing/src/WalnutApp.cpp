@@ -46,7 +46,6 @@ public:
 	{
 
 		Timer timer;
-
 		m_Renderer.OnResize(m_ViewportWidth, m_ViewportHeight);
 		m_Renderer.Render();
 

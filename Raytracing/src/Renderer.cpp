@@ -1,5 +1,4 @@
-﻿#include <cmath>
-#include <iostream>
+﻿#include <iostream>
 
 #include "Walnut/Random.h"
 
@@ -27,14 +26,17 @@ void Renderer::Render()
 {
     for (uint32_t i = 0; i < m_FinalImage->GetWidth() * m_FinalImage->GetHeight(); i++)
     {
-        uint32_t y = std::floor(i / m_FinalImage->GetWidth());
+        uint32_t y = glm::floor(i / m_FinalImage->GetWidth());
         uint32_t x = i % m_FinalImage->GetWidth();
         glm::vec2 coord = {x, y};
 
+        float aspectRatio = m_FinalImage->GetWidth() / static_cast<float>(m_FinalImage->GetHeight());
+        
         float u = static_cast<float>(x) / m_FinalImage->GetWidth();
         float v = static_cast<float>(y) / m_FinalImage->GetHeight();
         glm::vec2 coord_uv = {u, v};
         glm::vec2 coord_mapped = {coord_uv * 2.0f - 1.0f};
+        coord_mapped.x *= aspectRatio;
 
         m_ImageData[i] = PerPixel(coord_mapped);
     }
@@ -44,17 +46,12 @@ void Renderer::Render()
 
 uint32_t Renderer::PerPixel(glm::vec2 coord)
 {
-    // uint8_t R, G, B, A;
-    //
-    // R = static_cast<uint8_t>(coord.x * 255.0f);
-    // G = static_cast<uint8_t>(coord.y * 255.0f);
-    // B = 0x00;
-    // A = 0xff;
-
     glm::vec3 rayOrigin(0.0f, 0.0f, 2.0f);
-    glm::vec3 rayDirection(coord.x, coord.y, -1.0f);
-    rayDirection = glm::normalize(rayDirection);
-    float radius = 0.5f;
+    glm::vec3 rayDirection = glm::normalize(glm::vec3(coord.x, coord.y, -1.0f));
+    glm::vec3 lightDirection = glm::normalize(glm::vec3(-1.0f, 1.0f, -0.1f));
+    glm::vec3 sphereOrigin = glm::vec3(0.0f, 0.0f, 0.0f);
+    float sphereRadius = 0.5f;
+    
 
     // (bx^2+by^2+bz^2)t^2 + (axbx + ayby + azbz)2t + (ax^2 + ay^2 + az^2 - r^2) = 0
     //                   a                        b                            c
@@ -63,19 +60,44 @@ uint32_t Renderer::PerPixel(glm::vec2 coord)
     // r = spehere radius
     // t = hit distance
 
+    // (bx^2+by^2+bz^2)t^2 + (axbx+ayby+azbz - (bxox+byoy+bzoz))2t + ax^2+bx^2+az^2 - 2(axox +ayoy+azoz) + ox^2+oy^2+oz^2
+
+    glm::vec3 oc = rayOrigin - sphereOrigin;
     float a = glm::dot(rayDirection, rayDirection);
-    float b = 2.0f * glm::dot(rayOrigin, rayDirection);
-    float c = glm::dot(rayOrigin, rayOrigin) - radius * radius;
-
+    float b = 2.0f * glm::dot(oc, rayDirection);
+    float c = glm::dot(oc, oc) - sphereRadius * sphereRadius;
     //b^2-4ac
+    float discriminant = b*b - 4.0f*a*c;
+    
+    if (discriminant >= 0.0f)
+    {
+        float t[2] = {(-b + glm::sqrt(discriminant)) / (2 * a),
+                      (-b - glm::sqrt(discriminant)) / (2 * a)};
 
-    float discriminant = b * b - 4.0f * a * c;
+        glm::vec3 hitPosition[2];
+        glm::vec3 hitNormal[2];
+        
+        for (int i = 0; i < 2; i++)
+        {
+            hitPosition[i] = rayOrigin + rayDirection * t[i];
+            hitNormal[i] = glm::normalize(hitPosition[i] - sphereOrigin);
+        }
 
-    float dist = (-b + glm::sqrt(discriminant)) / 2 * a;
+        // float hitDepth = glm::distance(hitPosition[0], hitPosition[1]);
 
-    if (discriminant >= 0)
-        return 0xffffffffu / dist;
+        float brightness = (glm::dot(lightDirection, hitNormal[0]) + 1) / 2;
+        
+        auto R = static_cast<uint8_t>(0xff * brightness);
+        auto G = static_cast<uint8_t>(0xff * brightness);
+        auto B = static_cast<uint8_t>(0xff * brightness);
+        auto A = static_cast<uint8_t>(0xff);
+        
+         return (0x00000000u | (A << 24) | (B << 16) | (G << 8) | R);
+        
+    }
 
-    // return (0x00000000u | (A << 24) | (B << 16) | (G << 8) | R);
+    // if (discriminant >= 0)
+    //     return 0xffffffffu;
+    
     return 0x00000000u;
 }
