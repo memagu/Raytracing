@@ -4,6 +4,20 @@
 
 #include "Renderer.h"
 
+namespace Utils
+{
+    static uint32_t ConvertToRGBA(const glm::vec4& color)
+    {
+        auto r = static_cast<uint8_t>(color.r * 255.0f);
+        auto g = static_cast<uint8_t>(color.g * 255.0f);
+        auto b = static_cast<uint8_t>(color.b * 255.0f);
+        auto a = static_cast<uint8_t>(color.a * 255.0f);
+
+        uint32_t result = (a << 24) | (b << 16) | (g << 8) | r;
+        return result;
+    }
+}
+
 void Renderer::OnResize(uint32_t width, uint32_t height)
 {
     if (m_FinalImage)
@@ -37,18 +51,20 @@ void Renderer::Render()
         glm::vec2 coord_uv = {u, v};
         glm::vec2 coord_mapped = {coord_uv * 2.0f - 1.0f};
         coord_mapped.x *= aspectRatio;
-
-        m_ImageData[i] = PerPixel(coord_mapped);
+        
+        glm::vec4 color = PerPixel(coord_mapped);
+        color = glm::clamp(color, glm::vec4(0.0f), glm::vec4(1.0f));
+        m_ImageData[i] = Utils::ConvertToRGBA(color);
     }
 
     m_FinalImage->SetData(m_ImageData);
 }
 
-uint32_t Renderer::PerPixel(glm::vec2 coord)
+glm::vec4 Renderer::PerPixel(glm::vec2 coord)
 {
-    glm::vec3 rayOrigin(0.0f, 0.0f, 2.0f);
+    glm::vec3 rayOrigin(0.0f, 0.0f, 1.0f);
     glm::vec3 rayDirection = glm::normalize(glm::vec3(coord.x, coord.y, -1.0f));
-    glm::vec3 lightDirection = glm::normalize(glm::vec3(-1.0f, 1.0f, -0.1f));
+    glm::vec3 lightDirection = glm::normalize(glm::vec3(-1.0f, 1.0f, 0.5f));
     glm::vec3 sphereOrigin = glm::vec3(0.0f, 0.0f, 0.0f);
     float sphereRadius = 0.5f;
     
@@ -66,38 +82,28 @@ uint32_t Renderer::PerPixel(glm::vec2 coord)
     float a = glm::dot(rayDirection, rayDirection);
     float b = 2.0f * glm::dot(oc, rayDirection);
     float c = glm::dot(oc, oc) - sphereRadius * sphereRadius;
+    
     //b^2-4ac
     float discriminant = b*b - 4.0f*a*c;
+    if (discriminant < 0.0f)
+        return glm::vec4(0.0f);
     
-    if (discriminant >= 0.0f)
+    float t[2] = {(-b - glm::sqrt(discriminant)) / (2 * a),
+                  (-b + glm::sqrt(discriminant)) / (2 * a)};
+
+    glm::vec3 hitPosition[2];
+    glm::vec3 hitNormal[2];
+    
+    for (int i = 0; i < 2; i++)
     {
-        float t[2] = {(-b + glm::sqrt(discriminant)) / (2 * a),
-                      (-b - glm::sqrt(discriminant)) / (2 * a)};
-
-        glm::vec3 hitPosition[2];
-        glm::vec3 hitNormal[2];
-        
-        for (int i = 0; i < 2; i++)
-        {
-            hitPosition[i] = rayOrigin + rayDirection * t[i];
-            hitNormal[i] = glm::normalize(hitPosition[i] - sphereOrigin);
-        }
-
-        // float hitDepth = glm::distance(hitPosition[0], hitPosition[1]);
-
-        float brightness = (glm::dot(lightDirection, hitNormal[0]) + 1) / 2;
-        
-        auto R = static_cast<uint8_t>(0xff * brightness);
-        auto G = static_cast<uint8_t>(0xff * brightness);
-        auto B = static_cast<uint8_t>(0xff * brightness);
-        auto A = static_cast<uint8_t>(0xff);
-        
-         return (0x00000000u | (A << 24) | (B << 16) | (G << 8) | R);
-        
+        hitPosition[i] = rayOrigin + rayDirection * t[i];
+        hitNormal[i] = glm::normalize(hitPosition[i] - sphereOrigin);
     }
 
-    // if (discriminant >= 0)
-    //     return 0xffffffffu;
+    float brightness = glm::max(glm::dot(lightDirection, hitNormal[0]), 0.0f) / (t[0]*t[0]);
+    glm::vec3 sphereColor = glm::normalize(hitPosition[0]) * 0.5f + 0.5f; 
     
-    return 0x00000000u;
+    return glm::vec4(sphereColor * brightness,1.0f);
+    
+
 }
