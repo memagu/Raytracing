@@ -37,6 +37,10 @@ void Camera::OnUpdate(float ts)
 	float speed = 5.0f;
 
 	// Movement
+	if (Input::IsKeyDown(KeyCode::LeftShift))
+	{
+		speed = 15.0f;
+	}
 	if (Input::IsKeyDown(KeyCode::W))
 	{
 		m_Position += m_ForwardDirection * speed * ts;
