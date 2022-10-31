@@ -112,14 +112,14 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y)
 
     float multiplier = 1.0f;
 
-    int bounces = 10;
+    int bounces = 50;
     for (int i = 0; i < bounces; i++)
     {
         Renderer::HitPayload payload = TraceRay(ray);
 
         if (payload.HitDistance < 0.0f)
         {
-            glm::vec3 skyColor = glm::vec3(0.53f, 0.81f, 0.92f);
+            glm::vec3 skyColor = glm::vec3(0.6f, 0.7f, 0.9f);
             // glm::vec3 skyColor = glm::vec3(0.0f);
             color += skyColor * multiplier;
             break;
@@ -137,13 +137,15 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y)
             glm::dot(-lightDirection, payload.WorldNormal),
             0.0f);
 
-        glm::vec3 sphereColor = m_ActiveScene->Spheres[payload.ObjectIndex].Albedo;
+        const Sphere& sphere = m_ActiveScene->Spheres[payload.ObjectIndex];
+        const Material& material = m_ActiveScene->Materials[sphere.MaterialIndex];
+        glm::vec3 sphereColor = material.Albedo;
         color += sphereColor * brightness * multiplier;
         
-        multiplier *= 0.7f;
+        multiplier *= 0.5f;
 
         ray.Origin = payload.WorldPosition + payload.WorldNormal * 0.0001f;
-        ray.Direction = glm::reflect(ray.Direction, payload.WorldNormal);
+        ray.Direction = glm::reflect(ray.Direction, payload.WorldNormal + material.Roughness * Walnut::Random::Vec3(-0.5f, 0.5));
     }
 
     return glm::vec4(color, 1.0f);
